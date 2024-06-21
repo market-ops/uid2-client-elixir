@@ -1,0 +1,72 @@
+name: Elixir CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  MIX_ENV: test
+
+permissions:
+  contents: 'read'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: "Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}"
+    strategy:
+      matrix:
+        otp: ['26.1.2']
+        elixir: ['1.15.7']
+
+    steps:
+    - name: 'Set up Elixir'
+      id: beam
+      uses: erlef/setup-beam@v1
+      with:
+        otp-version: ${{matrix.otp}}
+        elixir-version: ${{matrix.elixir}}
+
+    - name: 'Checkout code'
+      uses: actions/checkout@v3
+
+    - name: 'Restore Dependencies cache'
+      id: cache-deps
+      uses: actions/cache@v3
+      with:
+        path: deps
+        key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-${{ env.cache-name }}-
+
+    - name: 'Cache compiled build'
+      id: cache-build
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-compiled-build
+      with:
+        path: _build
+        key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-${{ env.cache-name }}-
+          ${{ runner.os }}-mix-
+
+    - name: 'Install dependencies'
+      run: mix deps.get
+
+    - name: 'Compiles without warnings'
+      run: mix compile --warnings-as-errors
+
+    - name: 'Check Formatting'
+      run: mix format --check-formatted
+
+    - name: 'Run Credo'
+      run: mix credo
+      
+    - name: 'Run tests'
+      run: mix test      
+
+    - name: 'Run Dialyzer'
+      run: mix dialyzer --format github
